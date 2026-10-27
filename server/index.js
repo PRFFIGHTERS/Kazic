@@ -1,7 +1,9 @@
 import express from 'express';
+import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -16,11 +18,6 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-/**
- * Аутентификация запроса: извлекает JWT из заголовка Authorization,
- * проверяет его через Supabase Auth и возвращает пользователя.
- * Никогда не доверяем userId или role из тела запроса.
- */
 async function authenticate(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -41,7 +38,6 @@ async function authenticate(req) {
   return { user: data.user, profile };
 }
 
-// Middleware: только администратор
 async function requireAdmin(req, res, next) {
   try {
     const { profile } = await authenticate(req);
@@ -56,9 +52,6 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-// ------------------------------------------------------------
-// АДМИН: изменение баланса
-// ------------------------------------------------------------
 app.post('/api/admin/balance', requireAdmin, async (req, res) => {
   try {
     const { userId, operationType, amount, reason, idempotencyKey } = req.body;
@@ -91,9 +84,6 @@ app.post('/api/admin/balance', requireAdmin, async (req, res) => {
   }
 });
 
-// ------------------------------------------------------------
-// ИГРЫ: серверная логика
-// ------------------------------------------------------------
 app.post('/api/game/start', async (req, res) => {
   try {
     const { user } = await authenticate(req);
@@ -105,7 +95,6 @@ app.post('/api/game/start', async (req, res) => {
 
     let state;
     if (gameType === 'crash') {
-      // Сервер генерирует точку краша. Клиент не знает её до завершения раунда.
       const crashPoint = Math.max(1.01, 1 + Math.random() * 9);
       state = { crashPoint, startedAt: Date.now() };
     } else if (gameType === 'mines') {
@@ -155,7 +144,6 @@ app.post('/api/game/cashout', async (req, res) => {
       return res.status(404).json({ error: 'SESSION_NOT_FOUND' });
     }
 
-    // Проверяем множитель: он не может превышать crashPoint (для crash)
     let result;
     if (session.game_type === 'crash') {
       const crashPoint = Number(session.state?.crashPoint);
