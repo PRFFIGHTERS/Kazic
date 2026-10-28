@@ -872,25 +872,45 @@ export default function App() {
         return;
       }
 
-      // Автовход через Telegram
+      // Автовход через Telegram (через виртуальный Email)
       if (tg && tg.initDataUnsafe?.user?.id) {
         try {
-          const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-          if (anonError) throw anonError;
+          const tgUser = tg.initDataUnsafe.user;
+          const virtualEmail = `tg_${tgUser.id}@djg.local`;
+          const virtualPassword = `DjG_Secure_${tgUser.id}_2024!`;
 
-          if (anonData?.user) {
-            const tgUser = tg.initDataUnsafe.user;
+          // Пытаемся войти
+          let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email: virtualEmail,
+            password: virtualPassword
+          });
+
+          // Если пользователя еще нет — регистрируем его
+          if (authError && authError.message.includes('Invalid login credentials')) {
+            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+              email: virtualEmail,
+              password: virtualPassword,
+              options: { data: { telegram_id: tgUser.id, nickname: tgUser.username || tgUser.first_name || 'Player' } }
+            });
+            if (signUpError) throw signUpError;
+            authData = signUpData;
+          } else if (authError) {
+            throw authError;
+          }
+
+          if (authData?.user) {
+            // Вызываем RPC для обновления профиля и получения роли
             await supabase.rpc('handle_telegram_login', {
               p_telegram_id: tgUser.id,
               p_nickname: tgUser.username || tgUser.first_name || 'Player'
             });
 
-            setSession(anonData.session);
-            await loadUserData(anonData.user.id);
+            setSession(authData.session);
+            await loadUserData(authData.user.id);
           }
         } catch (err) {
           console.error("Telegram Auth Error:", err);
-          if (alive) setToast({ message: 'Ошибка входа через Telegram', type: 'error' });
+          if (alive) setToast({ message: `Ошибка входа: ${err.message}`, type: 'error' });
         }
       }
       if (alive) setLoading(false);
