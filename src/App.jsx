@@ -290,8 +290,6 @@ function CrashGame({ onFinish, notify }) {
       if (!res.ok) throw new Error(data.error || 'Не удалось начать раунд');
 
       setSessionId(data.sessionId);
-      // Сервер вернул состояние, но crashPoint не должен использоваться для принятия решения на клиенте.
-      // Клиент только визуализирует рост и завершает раунд при cashout.
       crashPointRef.current = data.state.crashPoint;
       setPhase('running');
       setMultiplier(1);
@@ -301,8 +299,6 @@ function CrashGame({ onFinish, notify }) {
       const tick = (now) => {
         const elapsed = (now - startRef.current) / 1000;
         const m = 1 + Math.pow(elapsed, 1.4) * 0.35;
-        // Визуальный рост продолжается, но сервер уже зафиксировал crashPoint.
-        // Клиент не может «выиграть» после краша, потому что cashout проверяется на сервере.
         setMultiplier(Number(m.toFixed(2)));
         rafRef.current = requestAnimationFrame(tick);
       };
@@ -857,13 +853,47 @@ export default function App() {
   // --- Auth state ---
   useEffect(() => {
     let alive = true;
+    const tg = window.Telegram?.WebApp;
+
+    // Инициализация Telegram
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
 
     const init = async () => {
       const { data: { session: s } } = await supabase.auth.getSession();
       if (!alive) return;
-      setSession(s);
-      if (s?.user) await loadUserData(s.user.id);
-      setLoading(false);
+
+      if (s) {
+        setSession(s);
+        await loadUserData(s.user.id);
+        setLoading(false);
+        return;
+      }
+
+      // Автовход через Telegram
+      if (tg && tg.initDataUnsafe?.user?.id) {
+        try {
+          const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+          if (anonError) throw anonError;
+
+          if (anonData?.user) {
+            const tgUser = tg.initDataUnsafe.user;
+            await supabase.rpc('handle_telegram_login', {
+              p_telegram_id: tgUser.id,
+              p_nickname: tgUser.username || tgUser.first_name || 'Player'
+            });
+
+            setSession(anonData.session);
+            await loadUserData(anonData.user.id);
+          }
+        } catch (err) {
+          console.error("Telegram Auth Error:", err);
+          if (alive) setToast({ message: 'Ошибка входа через Telegram', type: 'error' });
+        }
+      }
+      if (alive) setLoading(false);
     };
 
     init();
@@ -888,7 +918,7 @@ export default function App() {
 
   const loadUserData = async (userId) => {
     const [{ data: p }, { data: pref }, { data: b }, { data: fav }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
       supabase.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
       supabase.from('user_balances').select('balance').eq('user_id', userId).maybeSingle(),
       supabase.from('favorites').select('game_id').eq('user_id', userId),
@@ -992,9 +1022,12 @@ export default function App() {
           <div className="avatar" title={profile?.nickname}>
             {profile?.avatar_url ? <img src={profile.avatar_url} alt="" /> : (profile?.nickname?.[0] || 'U').toUpperCase()}
           </div>
-          <button className="icon-btn" onClick={() => supabase.auth.signOut()} aria-label="Выйти">
-            <Icon.Logout />
-          </button>
+          {/* Скрываем выход в Telegram */}
+          {!window.Telegram?.WebApp?.initData && (
+            <button className="icon-btn" onClick={() => supabase.auth.signOut()} aria-label="Выйти">
+              <Icon.Logout />
+            </button>
+          )}
         </div>
       </header>
 
