@@ -21,11 +21,7 @@
     --bg: #000000;
   }
 
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
-  }
+  *, *::before, *::after { box-sizing: border-box; }
 
   html {
     height: 100%;
@@ -66,6 +62,9 @@
 
   .vibr {
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: var(--size);
     height: var(--size);
     padding: 0;
@@ -78,6 +77,7 @@
     font-weight: 800;
     line-height: 1;
     letter-spacing: 0.05em;
+    text-align: center;
     color: #000000;
 
     background-color: #ffffff;
@@ -123,6 +123,20 @@
     outline-offset: 8px;
   }
 
+  .haptic-input {
+    position: fixed;
+    left: -9999px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    pointer-events: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   .status {
     position: absolute;
     left: 50%;
@@ -148,47 +162,79 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .vibr,
-    .vibr.is-pressed {
+    .vibr, .vibr.is-pressed {
       transition: transform 120ms linear, box-shadow 120ms linear;
     }
-    .status {
-      transition: opacity 120ms linear;
-    }
+    .status { transition: opacity 120ms linear; }
   }
 </style>
 </head>
 <body>
 
 <main class="stage">
-  <button id="vibr" class="vibr" type="button" aria-label="ВИБР">ВИБР</button>
+  <label id="vibr" class="vibr" for="haptic"
+         role="button" tabindex="0" aria-label="ВИБР">ВИБР</label>
+  <input type="checkbox" id="haptic" class="haptic-input"
+         tabindex="-1" aria-hidden="true">
   <p id="status" class="status" role="status" aria-live="polite"></p>
 </main>
+
+<!-- Официальный SDK Telegram Mini Apps.
+     Нужен только для доступа к HapticFeedback (нативная вибрация iPhone).
+     Вне Telegram ничего не ломает. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <script>
 (function () {
   'use strict';
 
-  var button = document.getElementById('vibr');
+  var label    = document.getElementById('vibr');
+  var haptic   = document.getElementById('haptic');
   var statusEl = document.getElementById('status');
 
-  /* ---------- Проверка поддержки вибрации ---------- */
+  /* ---------- Telegram Mini App ---------- */
 
-  var SUPPORTS_VIBRATE = (typeof navigator !== 'undefined') &&
-                         (typeof navigator.vibrate === 'function');
+  var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+  var IN_TELEGRAM = !!tg && typeof tg.platform === 'string' && tg.platform !== 'unknown';
 
-  var MSG_UNSUPPORTED = 'Вибрация не поддерживается в этом браузере';
-  var MSG_FAILED = 'Вибрация недоступна';
+  if (IN_TELEGRAM) {
+    try {
+      tg.ready();
+      tg.expand();
+      if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes();
+      if (typeof tg.setHeaderColor === 'function')      tg.setHeaderColor('#000000');
+      if (typeof tg.setBackgroundColor === 'function')  tg.setBackgroundColor('#000000');
+    } catch (e) { /* старые клиенты Telegram — молча игнорируем */ }
+  }
+
+  /* ---------- Определение возможностей ---------- */
+
+  var SUPPORTS_VIBRATE =
+    typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+
+  var IS_IOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  var HAS_TG_HAPTIC = IN_TELEGRAM && tg && tg.HapticFeedback &&
+                      typeof tg.HapticFeedback.impactOccurred === 'function';
+
+  // В Telegram и на Android чекбокс-хак не нужен.
+  if (HAS_TG_HAPTIC || SUPPORTS_VIBRATE) {
+    label.removeAttribute('for');
+    if (haptic && haptic.parentNode) haptic.parentNode.removeChild(haptic);
+    haptic = null;
+  }
 
   /* ---------- Состояние ---------- */
 
-  var locked = false;        // блокировка повторных нажатий
-  var lockTimer = 0;
+  var locked       = false;
+  var lockTimer    = 0;
   var releaseTimer = 0;
-  var statusTimer = 0;
+  var statusTimer  = 0;
 
-  var PRESS_MS = 120;        // длительность визуального «вдавливания»
-  var LOCK_MS = 500;         // полная блокировка до конца анимации
+  var PRESS_MS = 120;
+  var LOCK_MS  = 500;
 
   /* ---------- Статус ---------- */
 
@@ -208,17 +254,22 @@
     statusEl.classList.remove('is-visible');
   }
 
-  /* ---------- Вибрация ---------- */
+  /* ---------- Вибрация: приоритеты ---------- */
 
-  function tryVibrate() {
+  function tryTelegramHaptic() {
+    if (!HAS_TG_HAPTIC) return false;
+    try {
+      tg.HapticFeedback.impactOccurred('heavy');
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function tryNavigatorVibrate() {
     if (!SUPPORTS_VIBRATE) return false;
     try {
       var result = navigator.vibrate(200);
-      // Некоторые реализации возвращают undefined — это не ошибка.
       return result !== false;
-    } catch (err) {
-      return false;
-    }
+    } catch (e) { return false; }
   }
 
   /* ---------- Нажатие ---------- */
@@ -227,18 +278,23 @@
     if (locked) return;
     locked = true;
 
-    button.classList.add('is-pressed');
+    label.classList.add('is-pressed');
     window.clearTimeout(releaseTimer);
     releaseTimer = window.setTimeout(function () {
-      button.classList.remove('is-pressed');
+      label.classList.remove('is-pressed');
     }, PRESS_MS);
 
-    if (!SUPPORTS_VIBRATE) {
-      setStatus(MSG_UNSUPPORTED, 2600);
-    } else if (!tryVibrate()) {
-      setStatus(MSG_FAILED, 2000);
-    } else {
+    if (tryTelegramHaptic()) {
       hideStatus();
+    } else if (tryNavigatorVibrate()) {
+      hideStatus();
+    } else if (IS_IOS) {
+      // Вне Telegram на iPhone — лёгкий тактильный тик
+      // даёт сам Safari при переключении чекбокса через label.
+      // Проверить факт срабатывания нельзя — ничего не обещаем.
+      hideStatus();
+    } else {
+      setStatus('Вибрация не поддерживается в этом браузере', 2600);
     }
 
     window.clearTimeout(lockTimer);
@@ -250,39 +306,35 @@
   /* ---------- События ---------- */
 
   if (window.PointerEvent) {
-    button.addEventListener('pointerdown', function (event) {
+    label.addEventListener('pointerdown', function (event) {
       if (event.pointerType === 'mouse' && event.button !== 0) return;
       press();
     });
   } else {
-    button.addEventListener('touchstart', function () {
-      press();
-    }, { passive: true });
-    button.addEventListener('mousedown', function (event) {
+    label.addEventListener('touchstart', function () { press(); }, { passive: true });
+    label.addEventListener('mousedown', function (event) {
       if (event.button === 0) press();
     });
   }
 
-  button.addEventListener('keydown', function (event) {
+  label.addEventListener('keydown', function (event) {
     if (event.key === ' ' || event.key === 'Enter' || event.key === 'Spacebar') {
       event.preventDefault();
       press();
     }
   });
 
-  // Блокируем масштабирование двойным тапом на iOS
-  button.addEventListener('gesturestart', function (event) {
+  label.addEventListener('gesturestart', function (event) {
     event.preventDefault();
   });
 
-  /* ---------- PWA: иконки и manifest ---------- */
+  /* ---------- PWA: иконки + manifest ---------- */
 
   function createIcon(size, maskable) {
     try {
       var canvas = document.createElement('canvas');
       canvas.width = size;
       canvas.height = size;
-
       var ctx = canvas.getContext('2d');
       if (!ctx) return '';
 
@@ -303,20 +355,16 @@
       ctx.fillText('ВИБР', size / 2, size / 2 + size * 0.006);
 
       return canvas.toDataURL('image/png');
-    } catch (err) {
-      return '';
-    }
+    } catch (err) { return ''; }
   }
 
-  var icon180 = createIcon(180, false);
-  var icon192 = createIcon(192, false);
-  var icon512 = createIcon(512, false);
+  var icon180  = createIcon(180, false);
+  var icon192  = createIcon(192, false);
+  var icon512  = createIcon(512, false);
   var icon512m = createIcon(512, true);
 
   var appleIcon = document.getElementById('app-icon');
-  if (appleIcon && icon180) {
-    appleIcon.href = icon180;
-  }
+  if (appleIcon && icon180) appleIcon.href = icon180;
 
   if (icon192 && icon512 && window.Blob && window.URL && URL.createObjectURL) {
     try {
@@ -349,14 +397,11 @@
       var blob = new Blob([JSON.stringify(manifest)], {
         type: 'application/manifest+json'
       });
-
       var link = document.createElement('link');
       link.rel = 'manifest';
       link.href = URL.createObjectURL(blob);
       document.head.appendChild(link);
-    } catch (err) {
-      /* PWA-манифест недоступен — приложение продолжает работать */
-    }
+    } catch (err) { /* PWA-манифест недоступен — не критично */ }
   }
 })();
 </script>
