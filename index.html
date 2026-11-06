@@ -1,20 +1,365 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#07070b" />
-    <title>D.J.G. — Premium Game Arena</title>
-    
-    <!-- ЭТА СТРОКА ОБЯЗАТЕЛЬНА ДЛЯ TELEGRAM MINI APP -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="ВИБР — одна кнопка. Одна вибрация.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ВИБР">
+<title>ВИБР</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23000000'/%3E%3Ccircle cx='50' cy='50' r='34' fill='%23ffffff'/%3E%3C/svg%3E">
+<link id="app-icon" rel="apple-touch-icon">
+
+<style>
+  :root {
+    --size: min(68vmin, 300px);
+    --bg: #000000;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    height: 100%;
+    background: var(--bg);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    height: 100%;
+    min-height: 100svh;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+                 "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 16px)
+      calc(env(safe-area-inset-right, 0px) + 16px)
+      calc(env(safe-area-inset-bottom, 0px) + 16px)
+      calc(env(safe-area-inset-left, 0px) + 16px);
+  }
+
+  .stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .vibr {
+    position: relative;
+    width: var(--size);
+    height: var(--size);
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+
+    font-family: inherit;
+    font-size: calc(var(--size) * 0.155);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.05em;
+    color: #000000;
+
+    background-color: #ffffff;
+    background-image: radial-gradient(
+      120% 120% at 50% 10%,
+      #ffffff 0%,
+      #f8f8f8 40%,
+      #eaeaea 76%,
+      #d8d8d8 100%
+    );
+
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 28px 70px -14px rgba(255, 255, 255, 0.30),
+      inset 0 14px 24px rgba(255, 255, 255, 0.95),
+      inset 0 -16px 30px rgba(0, 0, 0, 0.16);
+
+    -webkit-appearance: none;
+    appearance: none;
+    touch-action: manipulation;
+    outline: none;
+    will-change: transform;
+    transform: translateZ(0);
+    transition:
+      transform 460ms cubic-bezier(0.22, 1.18, 0.36, 1),
+      box-shadow 320ms ease;
+  }
+
+  .vibr.is-pressed {
+    transform: scale(0.92) translateZ(0);
+    transition:
+      transform 110ms cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 110ms ease;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 10px 30px -14px rgba(255, 255, 255, 0.22),
+      inset 0 10px 18px rgba(255, 255, 255, 0.9),
+      inset 0 -10px 22px rgba(0, 0, 0, 0.18);
+  }
+
+  .vibr:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.55);
+    outline-offset: 8px;
+  }
+
+  .status {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 26px);
+    width: max-content;
+    max-width: calc(100vw - 56px);
+    margin: 0;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
+    color: rgba(255, 255, 255, 0.42);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -6px);
+    transition: opacity 320ms ease, transform 320ms ease;
+  }
+
+  .status.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .vibr,
+    .vibr.is-pressed {
+      transition: transform 120ms linear, box-shadow 120ms linear;
+    }
+    .status {
+      transition: opacity 120ms linear;
+    }
+  }
+</style>
+</head>
+<body>
+
+<main class="stage">
+  <button id="vibr" class="vibr" type="button" aria-label="ВИБР">ВИБР</button>
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var button = document.getElementById('vibr');
+  var statusEl = document.getElementById('status');
+
+  /* ---------- Проверка поддержки вибрации ---------- */
+
+  var SUPPORTS_VIBRATE = (typeof navigator !== 'undefined') &&
+                         (typeof navigator.vibrate === 'function');
+
+  var MSG_UNSUPPORTED = 'Вибрация не поддерживается в этом браузере';
+  var MSG_FAILED = 'Вибрация недоступна';
+
+  /* ---------- Состояние ---------- */
+
+  var locked = false;        // блокировка повторных нажатий
+  var lockTimer = 0;
+  var releaseTimer = 0;
+  var statusTimer = 0;
+
+  var PRESS_MS = 120;        // длительность визуального «вдавливания»
+  var LOCK_MS = 500;         // полная блокировка до конца анимации
+
+  /* ---------- Статус ---------- */
+
+  function setStatus(text, duration) {
+    statusEl.textContent = text;
+    statusEl.classList.add('is-visible');
+    window.clearTimeout(statusTimer);
+    if (duration) {
+      statusTimer = window.setTimeout(function () {
+        statusEl.classList.remove('is-visible');
+      }, duration);
+    }
+  }
+
+  function hideStatus() {
+    window.clearTimeout(statusTimer);
+    statusEl.classList.remove('is-visible');
+  }
+
+  /* ---------- Вибрация ---------- */
+
+  function tryVibrate() {
+    if (!SUPPORTS_VIBRATE) return false;
+    try {
+      var result = navigator.vibrate(200);
+      // Некоторые реализации возвращают undefined — это не ошибка.
+      return result !== false;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  /* ---------- Нажатие ---------- */
+
+  function press() {
+    if (locked) return;
+    locked = true;
+
+    button.classList.add('is-pressed');
+    window.clearTimeout(releaseTimer);
+    releaseTimer = window.setTimeout(function () {
+      button.classList.remove('is-pressed');
+    }, PRESS_MS);
+
+    if (!SUPPORTS_VIBRATE) {
+      setStatus(MSG_UNSUPPORTED, 2600);
+    } else if (!tryVibrate()) {
+      setStatus(MSG_FAILED, 2000);
+    } else {
+      hideStatus();
+    }
+
+    window.clearTimeout(lockTimer);
+    lockTimer = window.setTimeout(function () {
+      locked = false;
+    }, LOCK_MS);
+  }
+
+  /* ---------- События ---------- */
+
+  if (window.PointerEvent) {
+    button.addEventListener('pointerdown', function (event) {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      press();
+    });
+  } else {
+    button.addEventListener('touchstart', function () {
+      press();
+    }, { passive: true });
+    button.addEventListener('mousedown', function (event) {
+      if (event.button === 0) press();
+    });
+  }
+
+  button.addEventListener('keydown', function (event) {
+    if (event.key === ' ' || event.key === 'Enter' || event.key === 'Spacebar') {
+      event.preventDefault();
+      press();
+    }
+  });
+
+  // Блокируем масштабирование двойным тапом на iOS
+  button.addEventListener('gesturestart', function (event) {
+    event.preventDefault();
+  });
+
+  /* ---------- PWA: иконки и manifest ---------- */
+
+  function createIcon(size, maskable) {
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+
+      var ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, size, size);
+
+      var radius = size * (maskable ? 0.30 : 0.34);
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      ctx.fillStyle = '#000000';
+      ctx.font = '800 ' + Math.round(size * 0.125) +
+                 'px -apple-system, "Helvetica Neue", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('ВИБР', size / 2, size / 2 + size * 0.006);
+
+      return canvas.toDataURL('image/png');
+    } catch (err) {
+      return '';
+    }
+  }
+
+  var icon180 = createIcon(180, false);
+  var icon192 = createIcon(192, false);
+  var icon512 = createIcon(512, false);
+  var icon512m = createIcon(512, true);
+
+  var appleIcon = document.getElementById('app-icon');
+  if (appleIcon && icon180) {
+    appleIcon.href = icon180;
+  }
+
+  if (icon192 && icon512 && window.Blob && window.URL && URL.createObjectURL) {
+    try {
+      var pageUrl = location.href.split('#')[0];
+      var baseUrl = pageUrl.substring(0, pageUrl.lastIndexOf('/') + 1);
+
+      var icons = [
+        { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' }
+      ];
+      if (icon512m) {
+        icons.push({ src: icon512m, sizes: '512x512', type: 'image/png', purpose: 'maskable' });
+      }
+
+      var manifest = {
+        name: 'ВИБР',
+        short_name: 'ВИБР',
+        description: 'Одна кнопка. Одна вибрация.',
+        lang: 'ru',
+        dir: 'ltr',
+        start_url: pageUrl,
+        scope: baseUrl,
+        display: 'standalone',
+        orientation: 'portrait',
+        background_color: '#000000',
+        theme_color: '#000000',
+        icons: icons
+      };
+
+      var blob = new Blob([JSON.stringify(manifest)], {
+        type: 'application/manifest+json'
+      });
+
+      var link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = URL.createObjectURL(blob);
+      document.head.appendChild(link);
+    } catch (err) {
+      /* PWA-манифест недоступен — приложение продолжает работать */
+    }
+  }
+})();
+</script>
+
+</body>
 </html>
